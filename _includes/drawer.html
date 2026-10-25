@@ -1,0 +1,19 @@
+<div id="drawer-overlay" class="drawer-overlay" onclick="toggleDrawer()"></div>
+<div id="drawer" class="drawer">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <h5 class="mb-0 fw-bold text-info">Library Explorer</h5>
+        <button class="btn-close" onclick="toggleDrawer()"></button>
+    </div>
+    
+    <p class="small fw-bold text-muted text-uppercase mb-2">History & Pins</p>
+    <div id="folder-list" class="folder-list-container"></div>
+
+    <div class="mt-auto pt-3 border-top">
+        <div class="d-grid gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportData()">Export Backup</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="triggerImport()">Import Backup</button>
+            <input type="file" id="import-file" class="d-none" accept=".json" onchange="importData(event)">
+            <button class="btn btn-sm btn-outline-danger" onclick="clearCache()">Factory Reset App</button>
+        </div>
+    </div>
+</div>

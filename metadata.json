@@ -1,0 +1,8 @@
+{
+  "name": "RELIC: Research Library Companion",
+  "description": "A research library companion web app for reading and managing PDF, EPUB, and CBZ collections with built-in notes and viewer.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

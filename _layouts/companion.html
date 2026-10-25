@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+    {% include head.html %}
+<body>
+    {% include drawer.html %}
+    {% include navbar.html %}
+    <div class="container mt-4">
+        {% include finder.html %}
+        {{ content }}
+    </div>
+    {% include reader.html %}
+    {% include callback.html %}
+</body>
+</html>

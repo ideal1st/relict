@@ -1,0 +1,50 @@
+<div id="reader-overlay">
+    <div class="d-flex justify-content-between p-2 text-white" style="background: #2c3e50;">
+        <span id="reading-title" class="text-truncate fw-bold ms-2"></span>
+        <button class="btn btn-sm btn-danger px-4" onclick="closeReader()">Close</button>
+    </div>
+    <div class="reader-layout">
+        <div class="pdf-viewer">
+            <iframe id="pdf-viewer-frame" src="" width="100%" height="100%" style="display:none; border:none;"></iframe>
+            <canvas id="pdf-canvas" style="display:none; width:100%;"></canvas> <!-- Mobile PDF -->
+            <div id="epub-viewer" style="display:none; height:100%; background:white;"></div> <!-- EPUB -->
+            <!-- EPUB Navigation Overlay -->
+            <div id="epub-controls" style="display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); z-index:100; width: 300px;">
+                <div class="bg-dark p-2 rounded shadow text-center">
+                    <!-- Progress Bar -->
+                    <div class="progress-container mb-2" style="position: relative; height: 20px;">
+                        <input type="range" id="epub-slider" class="form-range" min="0" max="100" value="0" step="1" oninput="seekEpub(this.value)" style="cursor: pointer;">
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <button class="btn btn-outline-light btn-xs" onclick="prevPage()"><i data-lucide="chevron-left"></i></button>
+                        <span id="epub-percent" class="text-white small fw-bold">0%</span>
+                        <button class="btn btn-outline-light btn-xs" onclick="nextPage()"><i data-lucide="chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div id="cbz-viewer" style="display:none; height:100%; overflow-y:auto;"></div> <!-- CBZ -->
+        </div>
+            <div class="notes-sidebar">
+            <h6 class="fw-bold border-bottom pb-2">Reading Notes</h6>
+            
+            <div class="mb-3 mt-1">
+                <input type="text" id="note-search" class="form-control form-control-sm" 
+                       placeholder="Find in these notes..." oninput="renderNotes()">
+            </div>
+
+            <div id="notes-list" class="flex-grow-1"></div>
+            
+            <div class="mt-3 bg-light p-3 rounded border">
+                <div class="input-group input-group-sm mb-2">
+                    <!-- Dynamic label that changes based on format -->
+                    <span class="input-group-text" id="loc-label">Location:</span>
+                    <input type="text" id="note-location" class="form-control" placeholder="Current location..." readonly>
+                    <!-- Hidden field to store the raw CFI for EPUBs -->
+                    <input type="hidden" id="note-cfi">
+                </div>
+                <textarea id="note-text" class="form-control form-control-sm mb-2" rows="3" placeholder="Add research note..."></textarea>
+                <button class="btn btn-info btn-sm w-100 text-white" onclick="addNote()">Save to Database</button>
+            </div>
+        </div>
+    </div>
+</div>

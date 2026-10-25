@@ -1,0 +1,80 @@
+body { background-color: #f8f9fa; font-family: 'Roboto Sans', system-ui, sans-serif; padding-bottom: 40px; }
+.navbar { background: #2c3e50; color: white; border-bottom: 4px solid #3498db; }
+.drawer { position: fixed; top: 0; left: -320px; width: 320px; height: 100%; background: #fff; box-shadow: 2px 0 15px rgba(0,0,0,0.2); transition: 0.3s ease; z-index: 10000; padding: 20px; display: flex; flex-direction: column; }
+.drawer.open { left: 0; }
+.drawer-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 9999; }
+.drawer-overlay.open { display: block; }
+.folder-list-container { flex-grow: 1; overflow-y: auto; }
+.folder-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 8px; margin-bottom: 5px; }
+.folder-item:hover { background: #f0f7ff; }
+.pinned-icon { color: #f1c40f; fill: #f1c40f; }
+.book-card { background: white; border-radius: 12px; transition: 0.3s; cursor: pointer; height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; border: 1px solid transparent; }
+.book-card:hover { transform: translateY(-8px); box-shadow: 0 12px 20px rgba(0,0,0,0.1); border-color: #3498db; }
+.cover-box { height: 180px; background: #e9ecef; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+.cover-img { width: 100%; height: 100%; object-fit: cover; }
+.tag-pill { font-size: 0.65rem; background: #3498db; color: white; border-radius: 50px; padding: 2px 8px; margin: 2px; display: inline-flex; align-items: center; gap: 4px; }
+.tag-remove { cursor: pointer; font-weight: bold; opacity: 0.7; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 4px; }
+#reader-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 9998; }
+.reader-layout { display: flex; height: calc(100vh - 58px); }
+.pdf-viewer { flex: 3; background: #525659; position: relative; overflow: hidden; }
+.notes-sidebar { flex: 1; min-width: 280px; max-width: 360px; background: #fff; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; border-left: 1px solid #ddd; }
+iframe { width: 100%; height: 100%; border: none; }
+
+/* Highlight Style */
+mark { background-color: #ffeb3b; color: black; padding: 0; border-radius: 2px; }
+
+/* Ensure list items don't try to "grow" vertically like grid cards */
+.row-cols-1 .book-peek {
+    flex-direction: row !important;
+    height: auto !important;
+}
+.cursor-pointer { cursor: pointer; }
+
+/* EPUB Viewer & 2-page spread styling */
+#epub-viewer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: #fdfdfd;
+}
+
+#epub-viewer.spread-double::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 22px;
+    transform: translateX(-50%);
+    background: linear-gradient(to right, rgba(0,0,0,0.04), rgba(0,0,0,0.008) 40%, rgba(0,0,0,0.008) 60%, rgba(0,0,0,0.04));
+    border-left: 1px solid rgba(0,0,0,0.05);
+    border-right: 1px solid rgba(0,0,0,0.05);
+    pointer-events: none;
+    z-index: 2;
+}
+
+#epub-controls {
+    opacity: 1; /* Default state */
+    transition: opacity 0.3s ease-in-out;
+    z-index: 100; /* Ensure it stays above the viewer */
+}
+
+/* When the viewer is active, we apply a 'dimmed' class via JS */
+#epub-controls.dimmed {
+    opacity: 0.15;
+}
+
+/* Hover always overrides everything for accessibility */
+#epub-controls:hover,
+#epub-controls:focus-within {
+    opacity: 1 !important;
+}
+
+.epub-page-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}

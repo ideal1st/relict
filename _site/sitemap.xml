@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+<loc>http://localhost:4000/readme</loc>
+</url>
+<url>
+<loc>http://localhost:4000/</loc>
+</url>
+<url>
+<loc>http://localhost:4000/assets/pdfjs/web/compressed.tracemonkey-pldi-09.pdf</loc>
+<lastmod>2026-05-02T19:39:45+07:00</lastmod>
+</url>
+<url>
+<loc>http://localhost:4000/assets/pdfjs/web/viewer.html</loc>
+<lastmod>2026-05-02T19:39:45+07:00</lastmod>
+</url>
+</urlset>

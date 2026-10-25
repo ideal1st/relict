@@ -1,0 +1,27 @@
+<div class="row g-3 mb-4 p-3 bg-white rounded shadow-sm align-items-end">
+    <div class="col-md-8">
+        <label class="form-label small fw-bold text-muted">SEARCH COLLECTIONS</label>
+        <input type="text" id="search" class="form-control" placeholder="Filter titles, tags, or notes..." oninput="renderGrid()">
+    </div>
+    <div class="col-md-4 d-flex align-items-end gap-2">
+        <div class="flex-grow-1">
+            <label class="form-label small fw-bold text-muted">SORTING</label>
+            <select id="sort" class="form-select" onchange="renderGrid()">
+                <option value="name">Title (A-Z)</option>
+                <option value="size">Size</option>
+                <option value="date">Date</option>
+                <option value="type">File Type</option>
+                <option value="pages">Page Count</option>
+            </select>
+        </div>
+        <div class="btn-group btn-group-sm mb-1">
+            <button class="btn btn-outline-secondary active" id="view-grid" onclick="setView('grid')">
+                <i data-lucide="layout-grid"></i>
+            </button>
+            <button class="btn btn-outline-secondary" id="view-list" onclick="setView('list')">
+                <i data-lucide="list"></i>
+            </button>
+        </div>
+    </div>
+</div>
+<div id="grid"></div>
