@@ -622,7 +622,7 @@ function openBook(id) {
         } else {
             const fileURL = URL.createObjectURL(b.blob);
             const viewerPath = '/assets/pdfjs/web/viewer.html'; 
-            viewers.pdf.src = `${viewerPath}?file=${encodeURIComponent(fileURL)}`;
+            viewers.pdf.src = `${viewerPath}?_t=${Date.now()}&file=${encodeURIComponent(fileURL)}`;
             viewers.pdf.style.display = 'block';
     
             viewers.pdf.onload = () => {
