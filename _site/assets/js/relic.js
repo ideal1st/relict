@@ -113,14 +113,42 @@ function renderFolderList() {
         list.innerHTML = '<p class="text-muted small text-center mt-3">Empty history.</p>'; 
         return; 
     }
-    list.innerHTML = recentFolders.sort((a,b) => b.pinned - a.pinned || b.lastOpened - a.lastOpened).slice(0, 10).map((f) => `
-        <div class="folder-item">
-            <div class="text-truncate flex-grow-1 small fw-bold" onclick="reconnectFolder('${escapeHtml(f.name)}')">
-                <i data-lucide="folder" class="me-2 text-warning" style="width:14px"></i> ${escapeHtml(f.name)}
-            </div>
-            <i data-lucide="pin" class="${f.pinned ? 'pinned-icon' : 'text-muted'}" style="width:16px; cursor:pointer" onclick="togglePin('${escapeHtml(f.name)}')"></i>
-        </div>
-    `).join('');
+    list.innerHTML = '';
+    const sorted = recentFolders.slice().sort((a,b) => b.pinned - a.pinned || b.lastOpened - a.lastOpened).slice(0, 10);
+    sorted.forEach((f) => {
+        const item = document.createElement('div');
+        item.className = 'folder-item';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'text-truncate flex-grow-1 small fw-bold d-flex align-items-center';
+        titleDiv.style.cursor = 'pointer';
+
+        const folderIcon = document.createElement('i');
+        folderIcon.setAttribute('data-lucide', 'folder');
+        folderIcon.className = 'me-2 text-warning';
+        folderIcon.style.cssText = 'width:14px; min-width:14px;';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'text-truncate';
+        nameSpan.textContent = f.name;
+
+        titleDiv.appendChild(folderIcon);
+        titleDiv.appendChild(nameSpan);
+        titleDiv.addEventListener('click', () => reconnectFolder(f.name));
+
+        const pinIcon = document.createElement('i');
+        pinIcon.setAttribute('data-lucide', 'pin');
+        pinIcon.className = f.pinned ? 'pinned-icon' : 'text-muted';
+        pinIcon.style.cssText = 'width:16px; min-width:16px; cursor:pointer; margin-left: 8px;';
+        pinIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePin(f.name);
+        });
+
+        item.appendChild(titleDiv);
+        item.appendChild(pinIcon);
+        list.appendChild(item);
+    });
     if (window.lucide) lucide.createIcons();
 }
 
@@ -177,18 +205,46 @@ async function handleFilesSelect(event) {
 async function reconnectFolder(name) {
     const folder = recentFolders.find(f => f.name === name);
     if (!folder) return;
-    if (folder.handle && folder.handle.requestPermission) {
+
+    toggleDrawer(); // Close the drawer immediately so user sees indexing & books
+
+    if (folder.handle) {
         try {
-            if (await folder.handle.requestPermission({ mode: 'read' }) === 'granted') {
-                processFolder(folder.handle);
-                toggleDrawer();
+            let perm = 'prompt';
+            if (folder.handle.queryPermission) {
+                perm = await folder.handle.queryPermission({ mode: 'read' });
+            }
+            if (perm !== 'granted' && folder.handle.requestPermission) {
+                perm = await folder.handle.requestPermission({ mode: 'read' });
+            }
+            if (perm === 'granted') {
+                await processFolder(folder.handle);
                 return;
             }
         } catch (e) {
-            console.warn('Permission re-request failed:', e);
+            console.warn('Handle permission error:', e);
         }
     }
+
+    // If handle is missing or permission prompt failed, prompt user to pick folder again
+    showToast(`Re-opening "${folder.name}" - please select the folder`, 'info');
     initLibrary();
+}
+
+async function scanDirectoryEntries(dirHandle, fileList = []) {
+    for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+            try {
+                const file = await entry.getFile();
+                fileList.push(file);
+            } catch (e) {}
+        } else if (entry.kind === 'directory') {
+            try {
+                await scanDirectoryEntries(entry, fileList);
+            } catch (e) {}
+        }
+    }
+    return fileList;
 }
 
 async function processFolder(handle) {
@@ -200,14 +256,16 @@ async function processFolder(handle) {
     books = [];
     document.getElementById('grid').innerHTML = '<div class="text-center w-100 py-5"><div class="spinner-border text-info"></div><p class="mt-2 text-muted">Indexing files in folder...</p></div>';
     
-    for await (const entry of handle.values()) {
-        if (entry.kind === 'file') {
-            const file = await entry.getFile();
+    try {
+        const files = await scanDirectoryEntries(handle);
+        for (const file of files) {
             await ingestFile(file);
         }
+    } catch (err) {
+        console.error("Error reading directory:", err);
     }
     renderGrid();
-    showToast(`Loaded folder "${handle.name}"`, 'success');
+    showToast(`Loaded folder "${handle.name}" (${books.length} book${books.length === 1 ? '' : 's'})`, 'success');
 }
 
 async function processFileList(files, folderName = 'Library') {
