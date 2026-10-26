@@ -28,26 +28,26 @@ const pdfWorkerMjs = fs.readFileSync(path.join(srcBuildDir, 'pdf.worker.mjs'), '
 const pdfSandboxMjs = fs.readFileSync(path.join(srcBuildDir, 'pdf.sandbox.mjs'), 'utf8');
 
 // Create script-compatible .js versions that define globalThis and work in standard <script> and WebWorker contexts
-const pdfJs = pdfMjs
+const pdfJs = `(() => {\n${pdfMjs
   .replace(/import\.meta\.url/g, '(globalThis.document?.currentScript?.src || globalThis.location?.href || "")')
   .replace(
     /export\s*\{[^}]*\};?\s*(\/\/# sourceMappingURL=.*)?$/s,
     `if (typeof module !== 'undefined' && module.exports) {\n  module.exports = globalThis.pdfjsLib;\n}\n$1`
-  );
+  )}\n})();`;
 
-const pdfWorkerJs = pdfWorkerMjs
+const pdfWorkerJs = `(() => {\n${pdfWorkerMjs
   .replace(/import\.meta\.url/g, '(globalThis.location?.href || "")')
   .replace(
     /export\s*\{[^}]*\};?\s*(\/\/# sourceMappingURL=.*)?$/s,
     `if (typeof module !== 'undefined' && module.exports) {\n  module.exports = globalThis.pdfjsWorker;\n}\n$1`
-  );
+  )}\n})();`;
 
-const pdfSandboxJs = pdfSandboxMjs
+const pdfSandboxJs = `(() => {\n${pdfSandboxMjs
   .replace(/import\.meta\.url/g, '(globalThis.location?.href || "")')
   .replace(
     /export\s*\{[^}]*\};?\s*(\/\/# sourceMappingURL=.*)?$/s,
     `if (typeof module !== 'undefined' && module.exports) {\n  module.exports = globalThis.pdfjsSandbox;\n}\n$1`
-  );
+  )}\n})();`;
 
 const filesToWrite = [
   { name: 'pdf.mjs', content: pdfMjs },
