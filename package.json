@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "echo \"Build complete\"",
+    "build": "node scripts/build-pdfjs.js",
     "lint": "node --check server.js"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "pdfjs-dist": "5.7.284"
   }
 }

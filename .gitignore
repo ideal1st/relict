@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Do NOT ignore the PDF.js build assets
+!/assets/pdfjs/build/
+!/assets/pdfjs/build/**
+!/_site/assets/pdfjs/build/
+!/_site/assets/pdfjs/build/**
+!/public/assets/pdfjs/build/
+!/public/assets/pdfjs/build/**
