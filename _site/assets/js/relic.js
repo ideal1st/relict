@@ -71,32 +71,179 @@ const pageObserver = new IntersectionObserver((entries) => {
 }, observerOptions);
 
 // --- DATABASE CORE ---
-const request = indexedDB.open("LibraryCache", 4);
-request.onupgradeneeded = e => {
-    const d = e.target.result;
-    if (!d.objectStoreNames.contains("books")) d.createObjectStore("books", { keyPath: "name" });
-    if (!d.objectStoreNames.contains("folders")) d.createObjectStore("folders", { keyPath: "name" });
-};
-request.onsuccess = e => { 
-    db = e.target.result; 
-    loadRecentFolders(); 
-};
+let dbPromise = null;
+let isDbClosing = false;
+
+function openDB() {
+    if (db && !isDbClosing) {
+        return Promise.resolve(db);
+    }
+    if (dbPromise) {
+        return dbPromise;
+    }
+    dbPromise = new Promise((resolve) => {
+        try {
+            if (!window.indexedDB) {
+                console.warn("IndexedDB not supported in this environment");
+                resolve(null);
+                return;
+            }
+            const request = indexedDB.open("LibraryCache", 4);
+            
+            request.onupgradeneeded = e => {
+                const d = e.target.result;
+                if (!d.objectStoreNames.contains("books")) d.createObjectStore("books", { keyPath: "name" });
+                if (!d.objectStoreNames.contains("folders")) d.createObjectStore("folders", { keyPath: "name" });
+            };
+            
+            request.onsuccess = e => { 
+                db = e.target.result; 
+                isDbClosing = false;
+                
+                db.onversionchange = () => {
+                    console.warn("IndexedDB version change event received, closing connection gracefully.");
+                    isDbClosing = true;
+                    try { db.close(); } catch (_) {}
+                    db = null;
+                    dbPromise = null;
+                };
+
+                db.onclose = () => {
+                    isDbClosing = true;
+                    db = null;
+                    dbPromise = null;
+                };
+
+                resolve(db); 
+            };
+
+            request.onerror = e => {
+                console.warn("IndexedDB open error:", e.target?.error);
+                db = null;
+                dbPromise = null;
+                resolve(null);
+            };
+
+            request.onblocked = () => {
+                console.warn("IndexedDB open request blocked by older open connection");
+            };
+        } catch (err) {
+            console.warn("IndexedDB initialization exception:", err);
+            db = null;
+            dbPromise = null;
+            resolve(null);
+        }
+    });
+
+    return dbPromise;
+}
+
+async function getDB() {
+    try {
+        const database = await openDB();
+        if (!database || isDbClosing) {
+            db = null;
+            dbPromise = null;
+            return await openDB();
+        }
+        return database;
+    } catch (err) {
+        console.warn("getDB exception:", err);
+        return null;
+    }
+}
+
+async function withDBTransaction(storeNames, mode, fn) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const database = await getDB();
+        if (!database) {
+            return null;
+        }
+        try {
+            const trans = database.transaction(storeNames, mode);
+            return await fn(trans);
+        } catch (err) {
+            const msg = (err && err.message) ? err.message.toLowerCase() : '';
+            if (err.name === 'InvalidStateError' || msg.includes('closing') || msg.includes('closed')) {
+                console.warn(`IDBDatabase connection was closing (attempt ${attempt + 1}), reopening...`);
+                isDbClosing = true;
+                try { database.close(); } catch (_) {}
+                db = null;
+                dbPromise = null;
+                if (attempt === 0) {
+                    continue;
+                }
+            }
+            console.warn("IndexedDB transaction warning:", err);
+            return null;
+        }
+    }
+    return null;
+}
+
+// Start opening DB and load history
+openDB().then(() => loadRecentFolders()).catch(err => {
+    console.warn("Initial DB load warning:", err);
+});
 
 // --- FOLDER MANAGEMENT ---
 async function loadRecentFolders() {
-    if (!db) return;
-    const trans = db.transaction("folders", "readonly");
-    const req = trans.objectStore("folders").getAll();
-    req.onsuccess = () => { 
-        recentFolders = req.result || []; 
-        renderFolderList(); 
-    };
+    try {
+        await withDBTransaction("folders", "readonly", (trans) => {
+            return new Promise((resolve) => {
+                const req = trans.objectStore("folders").getAll();
+                req.onsuccess = () => { 
+                    recentFolders = req.result || []; 
+                    renderFolderList(); 
+                    resolve(recentFolders);
+                };
+                req.onerror = () => resolve([]);
+            });
+        });
+    } catch (err) {
+        console.warn("loadRecentFolders error:", err);
+    }
 }
 
 async function saveFolderToDB(folderObj) {
-    if (!db) return;
-    const trans = db.transaction("folders", "readwrite");
-    trans.objectStore("folders").put(folderObj);
+    if (!folderObj || !folderObj.name) return;
+    try {
+        await withDBTransaction("folders", "readwrite", (trans) => {
+            return new Promise((resolve) => {
+                try {
+                    const req = trans.objectStore("folders").put(folderObj);
+                    req.onsuccess = () => resolve(true);
+                    req.onerror = () => {
+                        if (folderObj.handle) {
+                            try {
+                                const fallbackReq = trans.objectStore("folders").put({ ...folderObj, handle: null });
+                                fallbackReq.onsuccess = () => resolve(true);
+                                fallbackReq.onerror = () => resolve(false);
+                            } catch (_) {
+                                resolve(false);
+                            }
+                        } else {
+                            resolve(false);
+                        }
+                    };
+                } catch (putErr) {
+                    if (folderObj.handle) {
+                        try {
+                            const fallbackReq = trans.objectStore("folders").put({ ...folderObj, handle: null });
+                            fallbackReq.onsuccess = () => resolve(true);
+                            fallbackReq.onerror = () => resolve(false);
+                        } catch (_) {
+                            resolve(false);
+                        }
+                    } else {
+                        resolve(false);
+                    }
+                }
+            });
+        });
+    } catch (err) {
+        console.warn("saveFolderToDB error:", err);
+    }
 }
 
 function toggleDrawer() {
@@ -252,7 +399,7 @@ async function processFolder(handle) {
     const existing = recentFolders.find(f => f.name === handle.name);
     if (existing) folderData.pinned = existing.pinned;
     await saveFolderToDB(folderData);
-    loadRecentFolders();
+    await loadRecentFolders();
     books = [];
     document.getElementById('grid').innerHTML = '<div class="text-center w-100 py-5"><div class="spinner-border text-info"></div><p class="mt-2 text-muted">Indexing files in folder...</p></div>';
     
@@ -273,7 +420,7 @@ async function processFileList(files, folderName = 'Library') {
     const existing = recentFolders.find(f => f.name === folderName);
     if (existing) folderData.pinned = existing.pinned;
     await saveFolderToDB(folderData);
-    loadRecentFolders();
+    await loadRecentFolders();
     books = [];
     document.getElementById('grid').innerHTML = '<div class="text-center w-100 py-5"><div class="spinner-border text-info"></div><p class="mt-2 text-muted">Indexing files...</p></div>';
 
@@ -305,7 +452,7 @@ async function ingestFile(file) {
                     pageCount = locations.length;
                     book.destroy();
                 }
-                saveBookData(file.name, { pages: pageCount });
+                await saveBookData(file.name, { pages: pageCount });
             } catch (e) {
                 console.warn(`Failed to count pages for ${file.name}:`, e);
             }
@@ -774,21 +921,37 @@ async function jumpToLocation(val) {
 
 // --- SUPPORT FUNCTIONS ---
 async function getStoredBookData(name) {
-    if (!db) return null;
-    return new Promise(r => {
-        const trans = db.transaction("books", "readonly");
-        const req = trans.objectStore("books").get(name);
-        req.onsuccess = () => r(req.result || null);
-        req.onerror = () => r(null);
-    });
+    if (!name) return null;
+    try {
+        const result = await withDBTransaction("books", "readonly", (trans) => {
+            return new Promise(resolve => {
+                const req = trans.objectStore("books").get(name);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        });
+        return result || null;
+    } catch (err) {
+        console.warn("getStoredBookData error:", err);
+        return null;
+    }
 }
 
 async function saveBookData(name, newData) {
-    if (!db) return;
-    const existing = await getStoredBookData(name) || { name, tags: [], cover: null, notes: [], pageCount: 0 };
-    const updated = { ...existing, ...newData };
-    const trans = db.transaction("books", "readwrite");
-    trans.objectStore("books").put(updated);
+    if (!name) return;
+    try {
+        const existing = await getStoredBookData(name) || { name, tags: [], cover: null, notes: [], pageCount: 0 };
+        const updated = { ...existing, ...newData };
+        await withDBTransaction("books", "readwrite", (trans) => {
+            return new Promise(resolve => {
+                const req = trans.objectStore("books").put(updated);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => resolve(false);
+            });
+        });
+    } catch (err) {
+        console.warn("saveBookData error:", err);
+    }
 }
 
 async function generatePDFCover(file, fileName) {
@@ -1011,16 +1174,43 @@ function renderGrid() {
 
 // --- BACKUP AND CACHE MANAGEMENT ---
 async function exportData() {
-    if (!db) return;
-    const trans = db.transaction(["books", "folders"], "readonly");
-    const bData = await new Promise(r => trans.objectStore("books").getAll().onsuccess = e => r(e.target.result));
-    const fData = await new Promise(r => trans.objectStore("folders").getAll().onsuccess = e => r(e.target.result));
-    const blob = new Blob([JSON.stringify({ books: bData, folders: (fData || []).map(f => ({...f, handle: null})) })], { type: "application/json" });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `relic_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    showToast('Backup downloaded successfully', 'success');
+    try {
+        const data = await withDBTransaction(["books", "folders"], "readonly", (trans) => {
+            return new Promise((resolve) => {
+                const bReq = trans.objectStore("books").getAll();
+                const fReq = trans.objectStore("folders").getAll();
+                let bData = null;
+                let fData = null;
+                const checkDone = () => {
+                    if (bData !== null && fData !== null) {
+                        resolve({ bData, fData });
+                    }
+                };
+                bReq.onsuccess = () => { bData = bReq.result || []; checkDone(); };
+                bReq.onerror = () => { bData = []; checkDone(); };
+                fReq.onsuccess = () => { fData = fReq.result || []; checkDone(); };
+                fReq.onerror = () => { fData = []; checkDone(); };
+            });
+        });
+
+        if (!data) {
+            showToast('Unable to export library data', 'danger');
+            return;
+        }
+
+        const blob = new Blob([JSON.stringify({ 
+            books: data.bData, 
+            folders: (data.fData || []).map(f => ({ ...f, handle: null })) 
+        })], { type: "application/json" });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `relic_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        showToast('Backup downloaded successfully', 'success');
+    } catch (err) {
+        console.error("Export data failed:", err);
+        showToast('Export failed', 'danger');
+    }
 }
 
 function triggerImport() { 
@@ -1035,14 +1225,20 @@ async function importData(e) {
     reader.onload = async (ev) => {
         try {
             const data = JSON.parse(ev.target.result);
-            if (!db) return;
-            const trans = db.transaction(["books", "folders"], "readwrite");
-            if (Array.isArray(data.books)) data.books.forEach(b => trans.objectStore("books").put(b));
-            if (Array.isArray(data.folders)) data.folders.forEach(f => trans.objectStore("folders").put(f));
-            trans.oncomplete = () => {
+            const success = await withDBTransaction(["books", "folders"], "readwrite", (trans) => {
+                if (Array.isArray(data.books)) data.books.forEach(b => trans.objectStore("books").put(b));
+                if (Array.isArray(data.folders)) data.folders.forEach(f => trans.objectStore("folders").put(f));
+                return new Promise(resolve => {
+                    trans.oncomplete = () => resolve(true);
+                    trans.onerror = () => resolve(false);
+                });
+            });
+            if (success) {
                 showToast('Import successful! Re-indexing...', 'success');
                 setTimeout(() => location.reload(), 800);
-            };
+            } else {
+                showToast('Failed to import data.', 'danger');
+            }
         } catch (err) {
             console.error("Invalid backup file:", err);
             showToast('Invalid backup file JSON.', 'danger');
@@ -1052,9 +1248,25 @@ async function importData(e) {
 }
 
 function clearCache() { 
-    indexedDB.deleteDatabase("LibraryCache"); 
-    showToast('Cache cleared. Reloading...', 'warning');
-    setTimeout(() => location.reload(), 500);
+    if (db) {
+        try { db.close(); } catch (_) {}
+        db = null;
+        dbPromise = null;
+        isDbClosing = true;
+    }
+    const delReq = indexedDB.deleteDatabase("LibraryCache"); 
+    delReq.onsuccess = () => {
+        showToast('Cache cleared. Reloading...', 'warning');
+        setTimeout(() => location.reload(), 500);
+    };
+    delReq.onerror = () => {
+        showToast('Cache cleared. Reloading...', 'warning');
+        setTimeout(() => location.reload(), 500);
+    };
+    delReq.onblocked = () => {
+        console.warn('deleteDatabase blocked, reloading anyway...');
+        setTimeout(() => location.reload(), 500);
+    };
 }
 
 // Initial render
