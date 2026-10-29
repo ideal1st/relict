@@ -12,14 +12,10 @@ let currentView = 'grid';
 
 // EPUB display preferences
 let epubSpreadMode = 'double';     // 'single' or 'double'
-let epubSeparateCover = true;      // true: cover shown alone; false: cover paired on spread
-let isAdjustingSpread = false;
 
 try {
     const savedSpread = localStorage.getItem('relic_epub_spread');
     if (savedSpread === 'single' || savedSpread === 'double') epubSpreadMode = savedSpread;
-    const savedCover = localStorage.getItem('relic_epub_separate_cover');
-    if (savedCover !== null) epubSeparateCover = (savedCover === '1');
 } catch (e) {}
 
 function showToast(message, type = 'info') {
@@ -494,46 +490,135 @@ async function renderPDFMobile(blob, pageNum = 1) {
     URL.revokeObjectURL(url);
 }
 
-// --- EPUB 2-PAGE SPREAD & SEPARATE COVER SYSTEM ---
-
-function isAtCover(location) {
-    if (!location || !location.start) return false;
-    // Section 0 is typically the cover/title page
-    if (location.start.index === 0) {
-        if (location.start.displayed && location.start.displayed.page) {
-            return location.start.displayed.page === 1;
-        }
-        return true;
-    }
-    // Check href or idref for "cover"
-    if (location.start.href && /cover/i.test(location.start.href)) {
-        return true;
-    }
-    return false;
-}
+// --- EPUB VIEW MODE & READING AREA SCALING ---
 
 function updateEpubControlUI() {
     const btnSingle = document.getElementById('btn-epub-single');
     const btnDouble = document.getElementById('btn-epub-double');
-    const chkCover = document.getElementById('epub-cover-separate');
-    const coverWrapper = document.getElementById('epub-cover-wrapper');
 
     if (btnSingle) btnSingle.classList.toggle('active', epubSpreadMode === 'single');
     if (btnDouble) btnDouble.classList.toggle('active', epubSpreadMode === 'double');
+}
 
-    if (chkCover) {
-        chkCover.checked = epubSeparateCover;
-        chkCover.disabled = (epubSpreadMode === 'single');
+function updateContentsStyle(doc) {
+    if (!doc || !doc.head) return;
+    let styleEl = doc.getElementById('relic-epub-mode-style');
+    if (!styleEl) {
+        styleEl = doc.createElement('style');
+        styleEl.id = 'relic-epub-mode-style';
+        doc.head.appendChild(styleEl);
     }
-    if (coverWrapper) {
-        if (epubSpreadMode === 'single') {
-            coverWrapper.classList.add('opacity-50');
-            coverWrapper.title = 'Separate cover is available in 2 Pages mode';
-        } else {
-            coverWrapper.classList.remove('opacity-50');
-            coverWrapper.title = 'Display the book cover alone on the first spread';
+
+    if (epubSpreadMode === 'single') {
+        styleEl.textContent = `
+            html, body {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                font-size: 135% !important;
+                line-height: 1.68 !important;
+                padding-left: clamp(16px, 4vw, 48px) !important;
+                padding-right: clamp(16px, 4vw, 48px) !important;
+                margin: 0 auto !important;
+                overflow-x: hidden !important;
+            }
+            p, div, article, section, blockquote, li {
+                max-width: 100% !important;
+                font-size: inherit !important;
+                line-height: inherit !important;
+            }
+            h1 { font-size: 2.1em !important; line-height: 1.25 !important; }
+            h2 { font-size: 1.75em !important; line-height: 1.3 !important; }
+            h3 { font-size: 1.4em !important; line-height: 1.35 !important; }
+            h4, h5, h6 { font-size: 1.2em !important; }
+            /* Proportionally enlarge images to fit the reading area width */
+            img {
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                max-height: 92vh !important;
+                object-fit: contain !important;
+                display: block !important;
+                margin: 16px auto !important;
+            }
+            /* Proportionally enlarge SVG containers to fit reading area width */
+            svg {
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                max-height: 92vh !important;
+                display: block !important;
+                margin: 16px auto !important;
+            }
+            svg image {
+                width: 100% !important;
+                height: 100% !important;
+            }
+            /* Proportionally enlarge background images to fit reading area width */
+            [style*="background-image"], body, html, div, section, article {
+                background-size: 100% auto !important;
+                background-position: center top !important;
+                background-repeat: no-repeat !important;
+            }
+        `;
+        try {
+            const allElements = doc.querySelectorAll('*');
+            allElements.forEach(el => {
+                const comp = doc.defaultView ? doc.defaultView.getComputedStyle(el) : null;
+                const bg = comp ? comp.backgroundImage : (el.style ? el.style.backgroundImage : null);
+                if (bg && bg !== 'none' && !bg.includes('gradient')) {
+                    el.style.setProperty('background-size', '100% auto', 'important');
+                    el.style.setProperty('background-position', 'center top', 'important');
+                    el.style.setProperty('background-repeat', 'no-repeat', 'important');
+                    el.style.setProperty('width', '100%', 'important');
+                    if (el.tagName === 'BODY' || el.tagName === 'HTML' || el.clientHeight < 300) {
+                        el.style.setProperty('min-height', '90vh', 'important');
+                    }
+                }
+            });
+        } catch (_) {}
+    } else {
+        styleEl.textContent = `
+            html, body {
+                font-size: 100% !important;
+                line-height: 1.5 !important;
+                box-sizing: border-box !important;
+                padding: 16px 20px !important;
+                margin: 0 auto !important;
+            }
+            img {
+                max-width: 100% !important;
+                height: auto !important;
+                max-height: 85vh !important;
+                object-fit: contain !important;
+            }
+            svg {
+                max-width: 100% !important;
+                height: auto !important;
+                max-height: 85vh !important;
+            }
+            [style*="background-image"], body, html, div, section, article {
+                background-size: contain !important;
+                background-position: center center !important;
+                background-repeat: no-repeat !important;
+            }
+        `;
+    }
+}
+
+function applyEpubStylesToAllViews() {
+    const container = document.getElementById('epub-viewer');
+    if (!container) return;
+    const iframes = container.querySelectorAll('iframe');
+    iframes.forEach(iframe => {
+        try {
+            if (iframe.contentDocument) {
+                updateContentsStyle(iframe.contentDocument);
+            }
+        } catch (e) {
+            console.warn("Could not access iframe document:", e);
         }
-    }
+    });
 }
 
 function setEpubSpreadMode(mode) {
@@ -544,49 +629,28 @@ function setEpubSpreadMode(mode) {
     if (!currentRendition) return;
 
     const loc = currentRendition.currentLocation();
-    const isCover = isAtCover(loc);
     const container = document.getElementById('epub-viewer');
 
-    let targetSpread = 'none';
     if (epubSpreadMode === 'double') {
-        if (epubSeparateCover && isCover) {
-            targetSpread = 'none';
-            if (container) container.classList.remove('spread-double');
-        } else {
-            targetSpread = 'always';
-            if (container) container.classList.add('spread-double');
+        if (container) {
+            container.classList.remove('epub-single-mode');
+            container.classList.add('spread-double');
         }
+        currentRendition.spread('always', 0);
     } else {
-        targetSpread = 'none';
-        if (container) container.classList.remove('spread-double');
+        if (container) {
+            container.classList.remove('spread-double');
+            container.classList.add('epub-single-mode');
+        }
+        currentRendition.spread('none');
     }
 
-    currentRendition.spread(targetSpread, targetSpread === 'always' ? 0 : 800);
+    applyEpubStylesToAllViews();
+
     if (loc && loc.start && loc.start.cfi) {
-        currentRendition.display(loc.start.cfi);
-    }
-}
-
-function setEpubSeparateCover(enabled) {
-    epubSeparateCover = enabled;
-    try { localStorage.setItem('relic_epub_separate_cover', enabled ? '1' : '0'); } catch (e) {}
-    updateEpubControlUI();
-
-    if (!currentRendition || epubSpreadMode !== 'double') return;
-
-    const loc = currentRendition.currentLocation();
-    const isCover = isAtCover(loc);
-    const container = document.getElementById('epub-viewer');
-
-    let targetSpread = (epubSeparateCover && isCover) ? 'none' : 'always';
-    if (container) {
-        if (targetSpread === 'always') container.classList.add('spread-double');
-        else container.classList.remove('spread-double');
-    }
-
-    currentRendition.spread(targetSpread, targetSpread === 'always' ? 0 : 800);
-    if (loc && loc.start && loc.start.cfi) {
-        currentRendition.display(loc.start.cfi);
+        currentRendition.display(loc.start.cfi).then(() => {
+            applyEpubStylesToAllViews();
+        });
     }
 }
 
@@ -601,30 +665,6 @@ function handleEpubRelocated(location) {
         if (cfiInput) cfiInput.value = location.start.cfi;
         updateProgress(currentBook);
     }
-
-    // Dynamic cover separation in 2-page spread mode
-    if (epubSpreadMode === 'double' && !isAdjustingSpread) {
-        const isCover = isAtCover(location);
-        const container = document.getElementById('epub-viewer');
-
-        if (epubSeparateCover && isCover) {
-            // Display cover alone
-            if (currentRendition.settings.spread !== 'none') {
-                isAdjustingSpread = true;
-                if (container) container.classList.remove('spread-double');
-                currentRendition.spread('none');
-                setTimeout(() => { isAdjustingSpread = false; }, 300);
-            }
-        } else {
-            // Display 2 pages spread
-            if (currentRendition.settings.spread !== 'always') {
-                isAdjustingSpread = true;
-                if (container) container.classList.add('spread-double');
-                currentRendition.spread('always', 0);
-                setTimeout(() => { isAdjustingSpread = false; }, 300);
-            }
-        }
-    }
 }
 
 function renderEPUB(blob) {
@@ -633,7 +673,10 @@ function renderEPUB(blob) {
     const controls = document.getElementById('epub-controls');
     const topControls = document.getElementById('epub-top-controls');
     
-    if (topControls) topControls.style.display = 'flex';
+    if (topControls) {
+        topControls.classList.add('epub-active');
+        topControls.style.setProperty('display', 'inline-flex', 'important');
+    }
     container.innerHTML = '';
 
     if (currentRendition) {
@@ -647,28 +690,29 @@ function renderEPUB(blob) {
 
     currentBook = ePub(blob);
 
-    // Initial spread layout
-    const initialSpread = epubSpreadMode === 'double' ? (epubSeparateCover ? 'none' : 'always') : 'none';
+    const initialSpread = (epubSpreadMode === 'double') ? 'always' : 'none';
 
     currentRendition = currentBook.renderTo("epub-viewer", {
         width: "100%",
         height: "100%",
         flow: "paginated",
         spread: initialSpread,
-        minSpreadWidth: initialSpread === 'always' ? 0 : 800
+        minSpreadWidth: (initialSpread === 'always') ? 0 : 800
     });
 
     if (initialSpread === 'always') {
+        container.classList.remove('epub-single-mode');
         container.classList.add('spread-double');
     } else {
         container.classList.remove('spread-double');
+        container.classList.add('epub-single-mode');
     }
 
-    // Register content hooks (forward keydown navigation from inside iframe)
+    // Register content hooks (scale reading area and forward keydown navigation)
     currentRendition.hooks.content.register((contents) => {
         const doc = contents.document;
         if (doc) {
-            // Forward keydown navigation inside the iframe
+            updateContentsStyle(doc);
             doc.addEventListener('keydown', (evt) => {
                 if (evt.key === 'ArrowRight' || evt.key === 'PageDown' || evt.key === ' ') {
                     evt.preventDefault();
@@ -684,6 +728,7 @@ function renderEPUB(blob) {
     });
 
     currentRendition.display().then(() => {
+        applyEpubStylesToAllViews();
         if (controls) controls.classList.add('dimmed');
     });
 
@@ -695,6 +740,7 @@ function renderEPUB(blob) {
 
     currentRendition.on("relocated", (location) => {
         handleEpubRelocated(location);
+        applyEpubStylesToAllViews();
     });
 
     updateEpubControlUI();
@@ -757,12 +803,24 @@ function openBook(id) {
     }
 
     const topControls = document.getElementById('epub-top-controls');
+    if (topControls) {
+        if (b.type === 'epub') {
+            topControls.classList.add('epub-active');
+            topControls.style.setProperty('display', 'inline-flex', 'important');
+        } else {
+            topControls.classList.remove('epub-active');
+            topControls.style.setProperty('display', 'none', 'important');
+        }
+    }
     document.getElementById('epub-controls').style.display = (b.type === 'epub') ? 'block' : 'none';
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (b.type === 'pdf') {
-        if (topControls) topControls.style.display = 'none';
+        if (topControls) {
+            topControls.classList.remove('epub-active');
+            topControls.style.setProperty('display', 'none', 'important');
+        }
         if (isMobile) {
             viewers.canvas.style.display = 'block';
             renderPDFMobile(b.blob);
@@ -788,11 +846,17 @@ function openBook(id) {
             };
         }
     } else if (b.type === 'epub') {
-        if (topControls) topControls.style.display = 'flex';
+        if (topControls) {
+            topControls.classList.add('epub-active');
+            topControls.style.setProperty('display', 'inline-flex', 'important');
+        }
         viewers.epub.style.display = 'block';
         renderEPUB(b.blob);
     } else if (b.type === 'cbz') {
-        if (topControls) topControls.style.display = 'none';
+        if (topControls) {
+            topControls.classList.remove('epub-active');
+            topControls.style.setProperty('display', 'none', 'important');
+        }
         viewers.cbz.style.display = 'block';
         renderCBZ(b.blob);
     }
@@ -806,7 +870,10 @@ function closeReader() {
     const controls = document.getElementById('epub-controls');
     if (controls) controls.classList.remove('dimmed');
     const topControls = document.getElementById('epub-top-controls');
-    if (topControls) topControls.style.display = 'none';
+    if (topControls) {
+        topControls.classList.remove('epub-active');
+        topControls.style.setProperty('display', 'none', 'important');
+    }
 
     if (currentRendition) {
         try { currentRendition.destroy(); } catch (e) {}
@@ -1082,7 +1149,7 @@ function renderGrid() {
                     <div class="mb-3" style="font-size: 3rem;">📚</div>
                     <h4 class="fw-bold mb-2">Welcome to RELIC</h4>
                     <p class="text-muted max-w-md mx-auto mb-4" style="max-width: 540px;">
-                        Your research library companion. Read PDFs, EPUBs with <strong>Two-Page Spread & Separate Cover</strong> support, and CBZ comics with location-linked notes.
+                        Your research library companion. Read PDFs, EPUBs with <strong>Two-Page Spread & Single Page</strong> view support, and CBZ comics with location-linked notes.
                     </p>
                     <div class="d-flex justify-content-center gap-2 flex-wrap">
                         <button class="btn btn-info text-white fw-bold px-4 shadow-sm" onclick="initFiles()">
@@ -1271,6 +1338,11 @@ function clearCache() {
 
 // Initial render
 document.addEventListener('DOMContentLoaded', () => {
+    const topControls = document.getElementById('epub-top-controls');
+    if (topControls) {
+        topControls.classList.remove('epub-active');
+        topControls.style.setProperty('display', 'none', 'important');
+    }
     updateEpubControlUI();
     renderGrid();
     if (window.lucide) lucide.createIcons();

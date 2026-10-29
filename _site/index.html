@@ -105,8 +105,8 @@
                 <span id="reading-badge" class="badge bg-secondary text-uppercase" style="font-size: 0.65rem;"></span>
             </div>
 
-            <!-- EPUB-specific controls in top bar -->
-            <div id="epub-top-controls" class="d-flex align-items-center gap-3" style="display: none;">
+            <!-- EPUB-specific controls in top bar (only visible when reading an EPUB) -->
+            <div id="epub-top-controls" class="align-items-center gap-2" style="display: none !important;">
                 <div class="btn-group btn-group-sm" role="group" aria-label="EPUB Page Layout">
                     <button type="button" id="btn-epub-single" class="btn btn-outline-light btn-sm" onclick="setEpubSpreadMode('single')" title="Single page view">
                         <i data-lucide="file-text" style="width: 14px; height: 14px;" class="me-1"></i> 1 Page
@@ -114,13 +114,6 @@
                     <button type="button" id="btn-epub-double" class="btn btn-outline-light btn-sm active" onclick="setEpubSpreadMode('double')" title="Two pages side-by-side (two-page spread)">
                         <i data-lucide="book-open" style="width: 14px; height: 14px;" class="me-1"></i> 2 Pages
                     </button>
-                </div>
-
-                <div class="form-check form-switch mb-0 d-flex align-items-center gap-2" id="epub-cover-wrapper" title="Display book cover by itself on the first spread">
-                    <input class="form-check-input mt-0" type="checkbox" id="epub-cover-separate" checked onchange="setEpubSeparateCover(this.checked)" style="cursor: pointer;">
-                    <label class="form-check-label small text-light fw-semibold" for="epub-cover-separate" style="cursor: pointer; user-select: none;">
-                        Separate Cover
-                    </label>
                 </div>
             </div>
 

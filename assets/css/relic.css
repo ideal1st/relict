@@ -78,3 +78,24 @@ mark { background-color: #ffeb3b; color: black; padding: 0; border-radius: 2px; 
     justify-content: center;
     border-radius: 50%;
 }
+
+/* EPUB Top Bar 1-page / 2-pages Toggle Visibility Guard */
+#epub-top-controls {
+    display: none !important;
+}
+#epub-top-controls.epub-active {
+    display: inline-flex !important;
+}
+
+/* EPUB Single Page View Mode proportional reading area enlargement */
+#epub-viewer.epub-single-mode {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#epub-viewer.epub-single-mode .epub-container,
+#epub-viewer.epub-single-mode .epub-view,
+#epub-viewer.epub-single-mode iframe {
+    width: 100% !important;
+    height: 100% !important;
+}
