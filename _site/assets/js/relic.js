@@ -502,6 +502,34 @@ function updateEpubControlUI() {
 
 function updateContentsStyle(doc) {
     if (!doc || !doc.head) return;
+
+    // Sanitize corrupted base64 transparent GIF placeholders that contain '??'
+    try {
+        const imgs = doc.querySelectorAll('img[src*="data:image"]');
+        imgs.forEach(img => {
+            const src = img.getAttribute('src');
+            if (src && src.includes('??')) {
+                img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            }
+        });
+        const styled = doc.querySelectorAll('[style*="data:image"]');
+        styled.forEach(el => {
+            if (el.style && el.style.backgroundImage && el.style.backgroundImage.includes('??')) {
+                el.style.backgroundImage = 'url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")';
+            }
+        });
+    } catch (_) {}
+
+    // Never inject destructive font/box overrides into pre-paginated / fixed-layout books
+    const isPrePaginated = (currentRendition && currentRendition._layout && currentRendition._layout.name === 'pre-paginated') ||
+        (currentBook && currentBook.package && currentBook.package.metadata && currentBook.package.metadata.layout === 'pre-paginated');
+
+    if (isPrePaginated) {
+        const existing = doc.getElementById('relic-epub-mode-style');
+        if (existing) existing.remove();
+        return;
+    }
+
     let styleEl = doc.getElementById('relic-epub-mode-style');
     if (!styleEl) {
         styleEl = doc.createElement('style');
@@ -509,101 +537,18 @@ function updateContentsStyle(doc) {
         doc.head.appendChild(styleEl);
     }
 
-    if (epubSpreadMode === 'single') {
-        styleEl.textContent = `
-            html, body {
-                width: 100% !important;
-                max-width: 100% !important;
-                box-sizing: border-box !important;
-                font-size: 135% !important;
-                line-height: 1.68 !important;
-                padding-left: clamp(16px, 4vw, 48px) !important;
-                padding-right: clamp(16px, 4vw, 48px) !important;
-                margin: 0 auto !important;
-                overflow-x: hidden !important;
-            }
-            p, div, article, section, blockquote, li {
-                max-width: 100% !important;
-                font-size: inherit !important;
-                line-height: inherit !important;
-            }
-            h1 { font-size: 2.1em !important; line-height: 1.25 !important; }
-            h2 { font-size: 1.75em !important; line-height: 1.3 !important; }
-            h3 { font-size: 1.4em !important; line-height: 1.35 !important; }
-            h4, h5, h6 { font-size: 1.2em !important; }
-            /* Proportionally enlarge images to fit the reading area width */
-            img {
-                width: 100% !important;
-                max-width: 100% !important;
-                height: auto !important;
-                max-height: 92vh !important;
-                object-fit: contain !important;
-                display: block !important;
-                margin: 16px auto !important;
-            }
-            /* Proportionally enlarge SVG containers to fit reading area width */
-            svg {
-                width: 100% !important;
-                max-width: 100% !important;
-                height: auto !important;
-                max-height: 92vh !important;
-                display: block !important;
-                margin: 16px auto !important;
-            }
-            svg image {
-                width: 100% !important;
-                height: 100% !important;
-            }
-            /* Proportionally enlarge background images to fit reading area width */
-            [style*="background-image"], body, html, div, section, article {
-                background-size: 100% auto !important;
-                background-position: center top !important;
-                background-repeat: no-repeat !important;
-            }
-        `;
-        try {
-            const allElements = doc.querySelectorAll('*');
-            allElements.forEach(el => {
-                const comp = doc.defaultView ? doc.defaultView.getComputedStyle(el) : null;
-                const bg = comp ? comp.backgroundImage : (el.style ? el.style.backgroundImage : null);
-                if (bg && bg !== 'none' && !bg.includes('gradient')) {
-                    el.style.setProperty('background-size', '100% auto', 'important');
-                    el.style.setProperty('background-position', 'center top', 'important');
-                    el.style.setProperty('background-repeat', 'no-repeat', 'important');
-                    el.style.setProperty('width', '100%', 'important');
-                    if (el.tagName === 'BODY' || el.tagName === 'HTML' || el.clientHeight < 300) {
-                        el.style.setProperty('min-height', '90vh', 'important');
-                    }
-                }
-            });
-        } catch (_) {}
-    } else {
-        styleEl.textContent = `
-            html, body {
-                font-size: 100% !important;
-                line-height: 1.5 !important;
-                box-sizing: border-box !important;
-                padding: 16px 20px !important;
-                margin: 0 auto !important;
-            }
-            img {
-                max-width: 100% !important;
-                height: auto !important;
-                max-height: 85vh !important;
-                object-fit: contain !important;
-            }
-            svg {
-                max-width: 100% !important;
-                height: auto !important;
-                max-height: 85vh !important;
-            }
-            [style*="background-image"], body, html, div, section, article {
-                background-size: contain !important;
-                background-position: center center !important;
-                background-repeat: no-repeat !important;
-            }
-        `;
-    }
+    // Gentle non-destructive styles for reflowable text
+    styleEl.textContent = `
+        html, body {
+            margin: 0 auto;
+            box-sizing: border-box;
+            padding: 0 16px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    `;
 }
 
 function applyEpubStylesToAllViews() {
@@ -642,8 +587,17 @@ function setEpubSpreadMode(mode) {
             container.classList.remove('spread-double');
             container.classList.add('epub-single-mode');
         }
-        currentRendition.spread('none');
+        currentRendition.spread('none', 0);
     }
+
+    // Reflowable font scaling
+    try {
+        const isPrePaginated = (currentRendition._layout && currentRendition._layout.name === 'pre-paginated') ||
+            (currentBook && currentBook.package && currentBook.package.metadata && currentBook.package.metadata.layout === 'pre-paginated');
+        if (!isPrePaginated && currentRendition.themes) {
+            currentRendition.themes.fontSize(epubSpreadMode === 'single' ? '110%' : '100%');
+        }
+    } catch (_) {}
 
     applyEpubStylesToAllViews();
 
@@ -697,7 +651,7 @@ function renderEPUB(blob) {
         height: "100%",
         flow: "paginated",
         spread: initialSpread,
-        minSpreadWidth: (initialSpread === 'always') ? 0 : 800
+        minSpreadWidth: 0
     });
 
     if (initialSpread === 'always') {
@@ -708,7 +662,7 @@ function renderEPUB(blob) {
         container.classList.add('epub-single-mode');
     }
 
-    // Register content hooks (scale reading area and forward keydown navigation)
+    // Register content hooks (sanitize and forward keydown navigation)
     currentRendition.hooks.content.register((contents) => {
         const doc = contents.document;
         if (doc) {
